@@ -145,29 +145,30 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, imageSize=(3, 100, 100)):
+    def __init__(self, imageSize=(3, 100, 200)):
         super(Discriminator, self).__init__()
         self.imageSize = imageSize
+        self.layers = []
+        sampleTensor = torch.zeros(imageSize)[None]
+        #4 or 2 are ok ==> 224 neurons or 72 neurons
+        while min(sampleTensor.shape[2], sampleTensor.shape[3])>2:
+            self.layers.append(nn.Conv2d(sampleTensor.shape[1], sampleTensor.shape[1] + 1,
+                                         (3, 3), stride=2, padding=1))
+            sampleTensor = self.layers[-1](sampleTensor)
+        size = sampleTensor.shape[1] * sampleTensor.shape[2] * sampleTensor.shape[3]
+        self.final = nn.Linear(size, 2)
 
     def forward(self, x):
-        skips = []
-        for l in self.encoder:
+        for l in self.layers:
             x = l(x)
-            skips.append(x)
-        skips.reverse()
-        if self.flag == "G1":
-            shapeTemp = x.shape
-            x = x.view(x.shape[0], -1)
-        x = self.relu(self.midLayer(x))
-        if self.flag == "G1":
-            x = x.view(shapeTemp)
-        for l, sx in zip(self.decoder, skips):
-            x = l(x + sx)
+        x = x.view(x.shape[0], -1)
+        print(x.shape)
+        x = self.final(x)
         return x
 
 
 if __name__ == "__main__":
-    inp = torch.zeros((10, 3, 100, 100))
+    inp = torch.zeros((10, 3, 100, 200))
     g = []
     #############################################################
     # flag = G1 or G2
@@ -187,5 +188,11 @@ if __name__ == "__main__":
            ]
     for g in gen:
         print("")
-        output = g(inp)
-        print(output.shape)
+        out = g(inp)
+        print(out.shape)
+
+    # Discriminator testing
+    dis = Discriminator(inp[0].shape)
+    print("")
+    out = dis(inp)
+    print(out.shape)
