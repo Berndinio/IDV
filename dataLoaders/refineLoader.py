@@ -38,24 +38,19 @@ class FEIPostDataset(Dataset):
         entityIdx += 1
         filePath = self.root_dir + "" + str(entityIdx) + "-" + str(poseIdx).zfill(2) + ".jpg"
         conditionImage = Image.open(filePath)
-        # target
-        ran = int(random.random() * 10.0) + 1
-        filePath = self.root_dir + "" + str(entityIdx) + "-" + str(ran).zfill(2) + ".jpg"
-        targetImage = Image.open(filePath)
-        # heatmaps
-        open_cv_image = np.array(targetImage)
-        open_cv_image = open_cv_image[:, :, ::-1].copy()
-        faces, rects = self.poseEstimator.predict(open_cv_image)
-        if len(faces) > 0:
-            # for f in faces:
-            #    pose = face.predictPose(image, f)
-            #    print(pose)
-            mask = self.poseEstimator.generateMask(faces[0], open_cv_image)
-            # maskBbox = self.poseEstimator.generateBboxMask(rects[0], open_cv_image)
-            embedding = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
-        else:
-            return None, None, None, None
 
+        # target
+        faces = []
+        while len(faces) <= 0:
+            ran = int(random.random() * 10.0) + 1
+            filePath = self.root_dir + "" + str(entityIdx) + "-" + str(ran).zfill(2) + ".jpg"
+            targetImage = Image.open(filePath)
+            # heatmaps
+            open_cv_image = np.array(targetImage)
+            open_cv_image = open_cv_image[:, :, ::-1].copy()
+            faces, rects = self.poseEstimator.predict(open_cv_image)
+        mask = self.poseEstimator.generateMask(faces[0], open_cv_image)
+        embedding = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
         if self.transform:
             conditionImage = self.transform(conditionImage)
             targetImage = self.transform(targetImage)
