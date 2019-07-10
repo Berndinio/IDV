@@ -40,7 +40,7 @@ class FacePoseEstimator:
                 for i, (x, y) in enumerate(faces[0]):
                     cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
                     cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
-                cv2.imwrite("faceKeypoints.jpg", image)
+                cv2.imwrite("images/faceKeypoints.jpg", image)
         return faces, rects
 
 
@@ -171,7 +171,7 @@ class BodyPoseEstimator:
                 cv2.circle(frame, (int(x), int(y)), 15, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
                 cv2.putText(frame, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 1,
                             lineType=cv2.LINE_AA)
-            cv2.imwrite("bodyKeypoints.jpg", frame)
+            cv2.imwrite("images/bodyKeypoints.jpg", frame)
         return points
 
     def generateMask(self, keyPoints, imageShape, save=False):
@@ -199,7 +199,7 @@ class BodyPoseEstimator:
         # save it
         if save:
             img = Image.fromarray(image * 255, 'L')
-            img.save('bodyMask.png')
+            img.save('images/bodyMask.png')
         return torch.Tensor(image)
 
 
@@ -217,6 +217,13 @@ class BodyPoseEstimator:
 
 if __name__ == "__main__":
     import os
+
+    # Body pose
+    body = BodyPoseEstimator()
+    marks = body.predict("testPerson.jpg", True)
+    mask = body.generateMask(marks, (128, 64), True)
+    print("Body landmarks:", marks)
+
 
     ffiles = []
     for root, dirs, files in os.walk("../dataset/FEI"):
@@ -237,8 +244,4 @@ if __name__ == "__main__":
             embedding = face.generatePoseEmbedding(faces[0], image, True)
         else:
             print("ERROR with "+path)
-    # Body pose
-    # body = BodyPoseEstimator()
-    # marks = body.predict("testPerson.jpg", True)
-    # mask = body.generateMask(marks, (128, 64), True)
-    # print("Body landmarks:", marks)
+
