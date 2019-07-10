@@ -8,9 +8,9 @@ class FacePoseEstimator:
         # initialize dlib's face detector (HOG-based) and then create
         # the facial landmark predictor
         self.detector = dlib.get_frontal_face_detector()
-        self.predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+        self.predictor = dlib.shape_predictor("pretrained_files/shape_predictor_68_face_landmarks.dat")
 
-    def predict(self, imPath):
+    def predict(self, imPath, show=False):
         faces = []
         image = cv2.imread(imPath)
         # reshape?
@@ -24,19 +24,25 @@ class FacePoseEstimator:
             for j in range(0, 68):
                 x, y = shape.part(j).x*width/image.shape[1], shape.part(j).y*height/image.shape[0]
                 faces[-1].append((int(x), int(y)))
+        if show:
+            image = cv2.imread(imPath)
+            for i, (x, y) in enumerate(faces[0]):
+                cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
+                cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
+            cv2.imwrite("faceKeypoints.jpg", image)
         return faces
 
 
 class BodyPoseEstimator:
     def __init__(self):
         # Specify the paths for the 2 files
-        protoFile = "pose/mpi/pose_deploy_linevec_faster_4_stages.prototxt"
-        weightsFile = "pose/mpi/pose_iter_160000.caffemodel"
+        protoFile = "pretrained_files/COCO_pose_deploy_linevec.prototxt"
+        weightsFile = "pretrained_files/COCO_pose_iter_440000.caffemodel"
 
         # Read the network into Memory
         self.net = cv2.dnn.readNetFromCaffe(protoFile, weightsFile)
 
-    def predict(self, imPath):
+    def predict(self, imPath, show=False):
         # Read image
         frame = cv2.imread(imPath)
         frameWidth = frame.shape[1]
@@ -54,7 +60,7 @@ class BodyPoseEstimator:
         W = output.shape[3]
         # Empty list to store the detected keypoints
         points = []
-        for i in range(len(18)):
+        for i in range(18):
             # confidence map of corresponding body's part.
             probMap = output[0, i, :, :]
 
@@ -65,10 +71,22 @@ class BodyPoseEstimator:
             x = (frameWidth * point[0]) / W
             y = (frameHeight * point[1]) / H
 
-            points.append((x, y))
+            points.append((int(x), int(y)))
+
+        if show:
+            for i, (x, y) in enumerate(points):
+                cv2.circle(frame, (int(x), int(y)), 15, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
+                cv2.putText(frame, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 1,
+                            lineType=cv2.LINE_AA)
+            cv2.imwrite("bodyKeypoints.jpg", frame)
         return points
 
 
 if __name__ == "__main__":
     face = FacePoseEstimator()
-    marks = face.predict("testFace.jpg")
+    marks = face.predict("testFace.jpg", True)
+    print("Facial landmarks:", marks)
+
+    body = BodyPoseEstimator()
+    marks = body.predict("testPerson.jpg", True)
+    print("Body landmarks:", marks)
