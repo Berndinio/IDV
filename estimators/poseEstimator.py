@@ -1,6 +1,15 @@
+########################################################################################################################
+# Jan Sieber, 3219317
+# Python 3.5
+# Deep Vision, University of Heidelberg, Prof. Dr. Björn Ommer
+########################################################################################################################
+
 import cv2
 import dlib
 import imutils
+import numpy as np
+import torch
+from PIL import Image
 
 
 class FacePoseEstimator:
@@ -22,7 +31,7 @@ class FacePoseEstimator:
             faces.append([])
             shape = self.predictor(gray, rect)
             for j in range(0, 68):
-                x, y = shape.part(j).x*width/image.shape[1], shape.part(j).y*height/image.shape[0]
+                x, y = shape.part(j).x * width / image.shape[1], shape.part(j).y * height / image.shape[0]
                 faces[-1].append((int(x), int(y)))
         if show:
             image = cv2.imread(imPath)
@@ -31,6 +40,26 @@ class FacePoseEstimator:
                 cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
             cv2.imwrite("faceKeypoints.jpg", image)
         return faces
+
+    def generateMask(self, keyPoints, imageShape, save=False):
+        image = np.zeros(imageShape, dtype=np.uint8)
+        sliced = keyPoints[slice(0, 17, 1)] + keyPoints[slice(26, 16, -1)]
+        sliced = np.array([sliced])
+        cv2.fillPoly(image, sliced, 1)
+        # draw lines
+        indiceList = list(range(0, 17)) + [0] + list(range(17, 27)) + [16]
+        width = int((keyPoints[16][0] - keyPoints[0][0]) * 0.2)
+        for j, kpIndex in enumerate(indiceList):
+            if j == 0:
+                continue
+            idx1 = indiceList[j - 1]
+            idx2 = indiceList[j]
+            cv2.line(image, keyPoints[idx1], keyPoints[idx2], 1, width)
+
+        if save:
+            img = Image.fromarray(image * 255, 'L')
+            img.save('faceMask.png')
+        return torch.Tensor(image)
 
 
 class BodyPoseEstimator:
@@ -81,12 +110,42 @@ class BodyPoseEstimator:
             cv2.imwrite("bodyKeypoints.jpg", frame)
         return points
 
+    def generateMask(self, keyPoints, imageShape, save=False):
+        image = np.zeros(imageShape, dtype=np.uint8)
+        # draw polygons
+        polygons = [[], []]
+        for i in [16, 15, 17, 1]:
+            polygons[0] += [keyPoints[i]]
+        for i in [2, 5, 11, 8]:
+            polygons[1] += [keyPoints[i]]
+        print(polygons)
+        polygons = np.array(polygons)
+        cv2.fillPoly(image, polygons, 1)
+        # draw lines
+        indiceList = [[10, 9, 8, 11, 12, 13], [11, 5, 6, 7], [8, 2, 3, 4], [2, 5], [1, 16, 15, 17, 1]]
+        width = int((keyPoints[11][0] - keyPoints[8][0]) * 0.75)
+
+        for i, sublist in enumerate(indiceList):
+            for j, kpIndex in enumerate(sublist):
+                if j == 0:
+                    continue
+                idx1 = indiceList[i][j - 1]
+                idx2 = indiceList[i][j]
+                cv2.line(image, keyPoints[idx1], keyPoints[idx2], 1, width)
+        # save it
+        if save:
+            img = Image.fromarray(image * 255, 'L')
+            img.save('bodyMask.png')
+        return torch.Tensor(image)
+
 
 if __name__ == "__main__":
     face = FacePoseEstimator()
     marks = face.predict("testFace.jpg", True)
+    mask = face.generateMask(marks[0], (3000, 2391), True)
     print("Facial landmarks:", marks)
 
     body = BodyPoseEstimator()
     marks = body.predict("testPerson.jpg", True)
+    mask = body.generateMask(marks, (2048, 1360), True)
     print("Body landmarks:", marks)

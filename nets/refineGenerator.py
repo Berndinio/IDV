@@ -81,7 +81,7 @@ class ResidualBlockUp(nn.Module):
 # 1 = With Upsampling (nearest neighbor)
 # 2 = With Deconvolution
 class Generator(nn.Module):
-    def __init__(self, N, linearScaling=1, in_channel=3, imageSize=(3, 100, 100), flag="G1", mode=2):
+    def __init__(self, N, imageSize=(3, 100, 100), flag="G1", mode=2, linearScaling=1):
         super(Generator, self).__init__()
         self.flag = flag
         self.relu = nn.ReLU()
@@ -91,7 +91,7 @@ class Generator(nn.Module):
 
         # create the N ResidualBlocks and ResidualUpsampleBlocks
 
-        self.encoder = [ResidualBlock(in_channel, linearScaling, False)]
+        self.encoder = [ResidualBlock(sampleTensor.shape[1], linearScaling, False)]
         out = sampleTensor[0, 0].shape
         sampleTensor = self.encoder[-1](sampleTensor)
 
@@ -162,7 +162,6 @@ class Discriminator(nn.Module):
         for l in self.layers:
             x = l(x)
         x = x.view(x.shape[0], -1)
-        print(x.shape)
         x = self.final(x)
         return x
 
@@ -181,10 +180,10 @@ if __name__ == "__main__":
     #############################################################
     # N, linearScaling, in_channel, imageSize, flag, mode
     #############################################################
-    gen = [Generator(3, 1, inp.shape[1], inp[0].shape, "G2", 2),
-           Generator(3, 1, inp.shape[1], inp[0].shape, "G1", 2),
-           Generator(3, 1, inp.shape[1], inp[0].shape, "G2", 1),
-           Generator(3, 1, inp.shape[1], inp[0].shape, "G1", 1)
+    gen = [Generator(3, inp[0].shape, "G2", 2),
+           Generator(3, inp[0].shape, "G1", 2),
+           Generator(3, inp[0].shape, "G2", 1),
+           Generator(3, inp[0].shape, "G1", 1)
            ]
     for g in gen:
         print("")
