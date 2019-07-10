@@ -4,13 +4,13 @@
 # Deep Vision, University of Heidelberg, Prof. Dr. Björn Ommer
 ########################################################################################################################
 
+import copy
+
 import cv2
 import dlib
-import imutils
 import numpy as np
 import torch
 from PIL import Image
-import copy
 
 
 class FacePoseEstimator:
@@ -18,14 +18,14 @@ class FacePoseEstimator:
         # initialize dlib's face detector (HOG-based) and then create
         # the facial landmark predictor
         self.detector = dlib.get_frontal_face_detector()
-        self.predictor = dlib.shape_predictor("pretrained_files/shape_predictor_68_face_landmarks.dat")
+        self.predictor = dlib.shape_predictor("estimators/pretrained_files/shape_predictor_68_face_landmarks.dat")
 
     def predict(self, image, show=False):
         faces = []
         # reshape?
         height, width = image.shape[0], image.shape[1]
         tmpImage = copy.deepcopy(image)
-        #image = imutils.resize(image, width=500)
+        # image = imutils.resize(image, width=500)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         rects = self.detector(gray, 1)
         if len(rects) > 0:
@@ -40,9 +40,8 @@ class FacePoseEstimator:
                 for i, (x, y) in enumerate(faces[0]):
                     cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
                     cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
-                cv2.imwrite("images/faceKeypoints.jpg", image)
+                cv2.imwrite("estimators/images/faceKeypoints.jpg", image)
         return faces, rects
-
 
     def generateMask(self, keyPoints, image, save=False):
         image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
@@ -61,27 +60,28 @@ class FacePoseEstimator:
 
         if save:
             img = Image.fromarray(image_new * 255, 'L')
-            img.save('images/faceMask.png')
+            img.save('estimators/images/faceMask.png')
         return torch.Tensor(image_new)
 
-    def generatePoseEmbedding(self, keypoints, image, save = False):
+    def generatePoseEmbedding(self, keypoints, image, save=False):
         heatmaps = np.zeros((len(keypoints), image.shape[0], image.shape[1]), dtype=np.uint8)
         for i, p in enumerate(keypoints):
             cv2.circle(heatmaps[i], p, 5, 1, thickness=-1, lineType=cv2.FILLED)
         if save:
             for i in range(len(keypoints)):
                 img = Image.fromarray(heatmaps[i] * 255, 'L')
-                img.save("images/HM"+str(i)+".png")
-        return heatmaps
+                img.save("estimators/images/HM" + str(i) + ".png")
+        return torch.Tensor(heatmaps)
 
-    def generateBboxMask(self, bbox, image, save = False):
+    def generateBboxMask(self, bbox, image, save=False):
         image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        center = (int(bbox.left() + bbox.width()/2.0),
-                  int(bbox.top() + bbox.height()/2.0 - 0.1*bbox.height()))
-        cv2.ellipse(image_new, center, (int(bbox.width()*0.7), int(bbox.height()*0.8)), 0, 0, 360, 1, thickness=-1, lineType=cv2.FILLED)
+        center = (int(bbox.left() + bbox.width() / 2.0),
+                  int(bbox.top() + bbox.height() / 2.0 - 0.1 * bbox.height()))
+        cv2.ellipse(image_new, center, (int(bbox.width() * 0.7), int(bbox.height() * 0.8)), 0, 0, 360, 1, thickness=-1,
+                    lineType=cv2.FILLED)
         if save:
             img = Image.fromarray(image_new * 255, 'L')
-            img.save('images/faceMaskBox.png')
+            img.save('estimators/images/faceMaskBox.png')
         return torch.Tensor(image_new)
 
     def predictPose(self, im, keypoints):
@@ -129,8 +129,8 @@ class FacePoseEstimator:
 class BodyPoseEstimator:
     def __init__(self):
         # Specify the paths for the 2 files
-        protoFile = "pretrained_files/COCO_pose_deploy_linevec.prototxt"
-        weightsFile = "pretrained_files/COCO_pose_iter_440000.caffemodel"
+        protoFile = "estimators/pretrained_files/COCO_pose_deploy_linevec.prototxt"
+        weightsFile = "estimators/pretrained_files/COCO_pose_iter_440000.caffemodel"
 
         # Read the network into Memory
         self.net = cv2.dnn.readNetFromCaffe(protoFile, weightsFile)
@@ -171,7 +171,7 @@ class BodyPoseEstimator:
                 cv2.circle(frame, (int(x), int(y)), 15, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
                 cv2.putText(frame, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 1,
                             lineType=cv2.LINE_AA)
-            cv2.imwrite("images/bodyKeypoints.jpg", frame)
+            cv2.imwrite("estimators/images/bodyKeypoints.jpg", frame)
         return points
 
     def generateMask(self, keyPoints, imageShape, save=False):
@@ -199,20 +199,8 @@ class BodyPoseEstimator:
         # save it
         if save:
             img = Image.fromarray(image * 255, 'L')
-            img.save('images/bodyMask.png')
+            img.save('estimators/images/bodyMask.png')
         return torch.Tensor(image)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
@@ -220,14 +208,15 @@ if __name__ == "__main__":
 
     # Body pose
     body = BodyPoseEstimator()
-    marks = body.predict("testPerson.jpg", True)
+    marks = body.predict("estimators/testPerson.jpg", True)
     mask = body.generateMask(marks, (128, 64), True)
     print("Body landmarks:", marks)
 
-
     ffiles = []
-    for root, dirs, files in os.walk("../dataset/FEI"):
+    for root, dirs, files in os.walk("dataset/FEI"):
         ffiles = files
+        if ".keep" in ffiles:
+            ffiles.remove(".keep")
         continue
     face = FacePoseEstimator()
     for file in ffiles:
@@ -236,12 +225,11 @@ if __name__ == "__main__":
         image = cv2.imread(path)
         faces, rects = face.predict(image, True)
         if len(faces) > 0:
-            #for f in faces:
+            # for f in faces:
             #    pose = face.predictPose(image, f)
             #    print(pose)
             mask = face.generateMask(faces[0], image, True)
             mask = face.generateBboxMask(rects[0], image, True)
             embedding = face.generatePoseEmbedding(faces[0], image, True)
         else:
-            print("ERROR with "+path)
-
+            print("ERROR with " + path)
