@@ -4,8 +4,27 @@
 # Deep Vision, University of Heidelberg, Prof. Dr. Björn Ommer
 ########################################################################################################################
 
+class Trainer:
+    def __init__(self):
+        pass
+
+
+
+    def lossG1(self):
+
+    def trainG1(self):
+
+
+
+    def startTraining(self):
+
+        self.trainG1()
+        pass
+
+
+
 
 
 
 if __name__=="__main__":
-    print("Hello world!")
+    Trainer().startTraining()

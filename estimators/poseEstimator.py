@@ -10,6 +10,7 @@ import imutils
 import numpy as np
 import torch
 from PIL import Image
+import copy
 
 
 class FacePoseEstimator:
@@ -19,33 +20,35 @@ class FacePoseEstimator:
         self.detector = dlib.get_frontal_face_detector()
         self.predictor = dlib.shape_predictor("pretrained_files/shape_predictor_68_face_landmarks.dat")
 
-    def predict(self, imPath, show=False):
+    def predict(self, image, show=False):
         faces = []
-        image = cv2.imread(imPath)
         # reshape?
         height, width = image.shape[0], image.shape[1]
-        image = imutils.resize(image, width=500)
+        tmpImage = copy.deepcopy(image)
+        #image = imutils.resize(image, width=500)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         rects = self.detector(gray, 1)
-        for (i, rect) in enumerate(rects):
-            faces.append([])
-            shape = self.predictor(gray, rect)
-            for j in range(0, 68):
-                x, y = shape.part(j).x * width / image.shape[1], shape.part(j).y * height / image.shape[0]
-                faces[-1].append((int(x), int(y)))
-        if show:
-            image = cv2.imread(imPath)
-            for i, (x, y) in enumerate(faces[0]):
-                cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
-                cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
-            cv2.imwrite("faceKeypoints.jpg", image)
-        return faces
+        if len(rects) > 0:
+            for (i, rect) in enumerate(rects):
+                faces.append([])
+                shape = self.predictor(gray, rect)
+                for j in range(0, 68):
+                    x, y = shape.part(j).x * width / image.shape[1], shape.part(j).y * height / image.shape[0]
+                    faces[-1].append((int(x), int(y)))
+            if show:
+                image = tmpImage
+                for i, (x, y) in enumerate(faces[0]):
+                    cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
+                    cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
+                cv2.imwrite("faceKeypoints.jpg", image)
+        return faces, rects
 
-    def generateMask(self, keyPoints, imageShape, save=False):
-        image = np.zeros(imageShape, dtype=np.uint8)
+
+    def generateMask(self, keyPoints, image, save=False):
+        image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
         sliced = keyPoints[slice(0, 17, 1)] + keyPoints[slice(26, 16, -1)]
         sliced = np.array([sliced])
-        cv2.fillPoly(image, sliced, 1)
+        cv2.fillPoly(image_new, sliced, 1)
         # draw lines
         indiceList = list(range(0, 17)) + [0] + list(range(17, 27)) + [16]
         width = int((keyPoints[16][0] - keyPoints[0][0]) * 0.2)
@@ -54,12 +57,73 @@ class FacePoseEstimator:
                 continue
             idx1 = indiceList[j - 1]
             idx2 = indiceList[j]
-            cv2.line(image, keyPoints[idx1], keyPoints[idx2], 1, width)
+            cv2.line(image_new, keyPoints[idx1], keyPoints[idx2], 1, width)
 
         if save:
-            img = Image.fromarray(image * 255, 'L')
-            img.save('faceMask.png')
-        return torch.Tensor(image)
+            img = Image.fromarray(image_new * 255, 'L')
+            img.save('images/faceMask.png')
+        return torch.Tensor(image_new)
+
+    def generatePoseEmbedding(self, keypoints, image, save = False):
+        heatmaps = np.zeros((len(keypoints), image.shape[0], image.shape[1]), dtype=np.uint8)
+        for i, p in enumerate(keypoints):
+            cv2.circle(heatmaps[i], p, 5, 1, thickness=-1, lineType=cv2.FILLED)
+        if save:
+            for i in range(len(keypoints)):
+                img = Image.fromarray(heatmaps[i] * 255, 'L')
+                img.save("images/HM"+str(i)+".png")
+        return heatmaps
+
+    def generateBboxMask(self, bbox, image, save = False):
+        image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        center = (int(bbox.left() + bbox.width()/2.0),
+                  int(bbox.top() + bbox.height()/2.0 - 0.1*bbox.height()))
+        cv2.ellipse(image_new, center, (int(bbox.width()*0.7), int(bbox.height()*0.8)), 0, 0, 360, 1, thickness=-1, lineType=cv2.FILLED)
+        if save:
+            img = Image.fromarray(image_new * 255, 'L')
+            img.save('images/faceMaskBox.png')
+        return torch.Tensor(image_new)
+
+    def predictPose(self, im, keypoints):
+        size = im.shape
+
+        # 2D image points. If you change the image, you need to change vector
+        image_points = np.array([
+            keypoints[30],  # Nose tip
+            keypoints[8],  # Chin
+            keypoints[36],  # Left eye left corner
+            keypoints[45],  # Right eye right corne
+            keypoints[48],  # Left Mouth corner
+            keypoints[54]  # Right mouth corner
+        ], dtype="double")
+
+        # 3D model points.
+        model_points = np.array([
+            (0.0, 0.0, 0.0),  # Nose tip
+            (0.0, -330.0, -65.0),  # Chin
+            (-225.0, 170.0, -135.0),  # Left eye left corner
+            (225.0, 170.0, -135.0),  # Right eye right corne
+            (-150.0, -150.0, -125.0),  # Left Mouth corner
+            (150.0, -150.0, -125.0)  # Right mouth corner
+
+        ])
+
+        # Camera internals
+
+        focal_length = size[1]
+        center = (size[1] / 2, size[0] / 2)
+        camera_matrix = np.array(
+            [[focal_length, 0, center[0]],
+             [0, focal_length, center[1]],
+             [0, 0, 1]], dtype="double"
+        )
+
+        dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
+        (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points, image_points, camera_matrix,
+                                                                      dist_coeffs,
+                                                                      flags=cv2.SOLVEPNP_ITERATIVE)
+        ret = (rotation_vector, translation_vector)
+        return ret
 
 
 class BodyPoseEstimator:
@@ -139,13 +203,42 @@ class BodyPoseEstimator:
         return torch.Tensor(image)
 
 
-if __name__ == "__main__":
-    face = FacePoseEstimator()
-    marks = face.predict("testFace.jpg", True)
-    mask = face.generateMask(marks[0], (3000, 2391), True)
-    print("Facial landmarks:", marks)
 
-    body = BodyPoseEstimator()
-    marks = body.predict("testPerson.jpg", True)
-    mask = body.generateMask(marks, (2048, 1360), True)
-    print("Body landmarks:", marks)
+
+
+
+
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    import os
+
+    ffiles = []
+    for root, dirs, files in os.walk("../dataset/FEI"):
+        ffiles = files
+        continue
+    face = FacePoseEstimator()
+    for file in ffiles:
+        path = root + "/" + file
+        print("Processing " + path)
+        image = cv2.imread(path)
+        faces, rects = face.predict(image, True)
+        if len(faces) > 0:
+            #for f in faces:
+            #    pose = face.predictPose(image, f)
+            #    print(pose)
+            mask = face.generateMask(faces[0], image, True)
+            mask = face.generateBboxMask(rects[0], image, True)
+            embedding = face.generatePoseEmbedding(faces[0], image, True)
+        else:
+            print("ERROR with "+path)
+    # Body pose
+    # body = BodyPoseEstimator()
+    # marks = body.predict("testPerson.jpg", True)
+    # mask = body.generateMask(marks, (128, 64), True)
+    # print("Body landmarks:", marks)
