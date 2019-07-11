@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 import random
+import numpy as np
 
 from dataLoaders.refineLoader import FEIPostDataset
 from nets.refineGenerator import Generator, Discriminator
@@ -15,9 +16,10 @@ from nets.refineGenerator import Generator, Discriminator
 class Trainer:
     def __init__(self, sampleImage):
         self.ceLoss = torch.nn.BCELoss()
-        self.G1 = Generator(6, sampleImage.shape, "G1", 2)
-        self.G2 = Generator(6, sampleImage.shape, "G2", 2)
-        self.D = Discriminator(sampleImage.shape)
+        s = sampleImage.shape
+        self.G1 = Generator(4, (s[0]+5, s[1], s[2]), "G1", 2)
+        self.G2 = Generator(4, (s[0]*2, s[1], s[2]), "G2", 2)
+        self.D = Discriminator((s[0]*2, s[1], s[2]))
 
     def lossG1(self, I_b1, I_b, M_b):
         """
@@ -48,15 +50,16 @@ class Trainer:
         data_transform = transforms.Compose([
             transforms.ToTensor()
         ])
-        self.lossG1()
         dataset = FEIPostDataset(root="dataset/FEI/",
                                  transform=data_transform)
         dataLoader = torch.utils.data.DataLoader(dataset,
                                                  batch_size=4, shuffle=True,
                                                  num_workers=4)
+        print("Loaded Data")
         #stage 1
         optimizer = torch.optim.Adam(self.G1.parameters(), lr=0.00001, betas=(0.5, 0.999))
         for epoch in range(numEpochs):
+            print("Running stage 1 training epoch "+str(epoch))
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                 inputs = torch.cat((conditionImages, embeddings), dim=1)
                 # zero the parameter gradients
@@ -70,6 +73,7 @@ class Trainer:
 
                 # print statistics
                 running_loss += loss.item()
+
                 if i % 2000 == 1999:  # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f' %
                           (epoch + 1, i + 1, running_loss / 2000))
@@ -78,6 +82,7 @@ class Trainer:
         #stage 2
         optimizer = torch.optim.Adam((self.G2.parameters(), self.D.parameters()), lr=0.00001, betas=(0.5, 0.999))
         for epoch in range(numEpochs):
+            print("Running stage 2 training epoch "+str(epoch))
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                 ran = random.random()
                 if ran >= 0.5:
@@ -117,4 +122,5 @@ class Trainer:
                           (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
 if __name__ == "__main__":
-    Trainer().startTraining()
+
+    Trainer(np.zeros((3,480,640))).startTraining()
