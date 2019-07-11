@@ -70,6 +70,7 @@ class ResidualBlockUp(nn.Module):
             if self.mode == 2:
                 x = self.deconv(x)
                 x = self.relu(x)
+                x = nn.functional.interpolate(x, size=self.outputSize)
         return x
 
 
@@ -125,10 +126,11 @@ class Generator(nn.Module):
     def forward(self, x):
         skips = []
         # encoder
+        print(x.shape)
         for l in self.encoder:
             x = l(x)
             skips.append(x)
-
+            print(x.shape)
         # mid layer
         if self.flag == "G1":
             shapeTemp = x.shape
@@ -139,8 +141,10 @@ class Generator(nn.Module):
 
         # decoder
         skips.reverse()
+        print(x.shape)
         for l, sx in zip(self.decoder, skips):
             x = l(x + sx)
+            print(x.shape)
         return x
 
 

@@ -17,8 +17,8 @@ class Trainer:
     def __init__(self, sampleImage):
         self.ceLoss = torch.nn.BCELoss()
         s = sampleImage.shape
-        self.G1 = Generator(4, (s[0]+5, s[1], s[2]), "G1", 2)
-        self.G2 = Generator(4, (s[0]*2, s[1], s[2]), "G2", 2)
+        self.G1 = Generator(8, (s[0]+68, s[1], s[2]), "G1", 2)
+        self.G2 = Generator(8, (s[0]*2, s[1], s[2]), "G2", 2)
         self.D = Discriminator((s[0]*2, s[1], s[2]))
 
     def lossG1(self, I_b1, I_b, M_b):
@@ -61,10 +61,11 @@ class Trainer:
         for epoch in range(numEpochs):
             print("Running stage 1 training epoch "+str(epoch))
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+                print(str(i)+"/"+str(len(dataLoader)))
                 inputs = torch.cat((conditionImages, embeddings), dim=1)
                 # zero the parameter gradients
                 optimizer.zero_grad()
-
+                print(inputs.shape)
                 # forward + backward + optimize
                 outputs = self.G1(inputs)
                 loss = self.lossG1(outputs, targetImages, masks)
