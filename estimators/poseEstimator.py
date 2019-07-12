@@ -43,8 +43,8 @@ class FacePoseEstimator:
                 cv2.imwrite("estimators/images/faceKeypoints.jpg", image)
         return faces, rects
 
-    def generateMask(self, keyPoints, image, save=False):
-        image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+    def generateMask(self, keyPoints, cv_image, save=False):
+        image_new = np.zeros((cv_image.shape[0], cv_image.shape[1]), dtype=np.uint8)
         sliced = keyPoints[slice(0, 17, 1)] + keyPoints[slice(26, 16, -1)]
         sliced = np.array([sliced])
         cv2.fillPoly(image_new, sliced, 1)
@@ -61,6 +61,7 @@ class FacePoseEstimator:
         if save:
             img = Image.fromarray(image_new * 255, 'L')
             img.save('estimators/images/faceMask.png')
+        image_new = np.repeat(image_new[None], cv_image.shape[2], axis=0)
         return torch.Tensor(image_new)
 
     def generatePoseEmbedding(self, keypoints, image, save=False):

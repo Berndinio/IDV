@@ -15,9 +15,10 @@ ffiles = []
 
 
 class FEIPostDataset(Dataset):
-    def __init__(self, root, transform=None):
+    def __init__(self, root, sampleShape, transform=None):
         self.root_dir = root
         self.transform = transform
+        self.sampleShape = sampleShape
         self.files = None
         for root, dirs, files in os.walk(self.root_dir):
             self.files = files
@@ -38,13 +39,14 @@ class FEIPostDataset(Dataset):
         entityIdx += 1
         filePath = self.root_dir + "" + str(entityIdx) + "-" + str(poseIdx).zfill(2) + ".jpg"
         conditionImage = Image.open(filePath)
-
+        conditionImage = transforms.Resize((self.sampleShape[1], self.sampleShape[2]), interpolation=2)(conditionImage)
         # target
         faces = []
         while len(faces) <= 0:
             ran = int(random.random() * 10.0) + 1
             filePath = self.root_dir + "" + str(entityIdx) + "-" + str(ran).zfill(2) + ".jpg"
             targetImage = Image.open(filePath)
+            targetImage = transforms.Resize((self.sampleShape[1],self.sampleShape[2]), interpolation=2)(targetImage)
             # heatmaps
             open_cv_image = np.array(targetImage)
             open_cv_image = open_cv_image[:, :, ::-1].copy()
@@ -54,6 +56,7 @@ class FEIPostDataset(Dataset):
         if self.transform:
             conditionImage = self.transform(conditionImage)
             targetImage = self.transform(targetImage)
+
         return conditionImage, targetImage, mask, embedding
 
 

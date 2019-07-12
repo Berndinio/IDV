@@ -126,11 +126,9 @@ class Generator(nn.Module):
     def forward(self, x):
         skips = []
         # encoder
-        print(x.shape)
         for l in self.encoder:
             x = l(x)
             skips.append(x)
-            print(x.shape)
         # mid layer
         if self.flag == "G1":
             shapeTemp = x.shape
@@ -141,10 +139,8 @@ class Generator(nn.Module):
 
         # decoder
         skips.reverse()
-        print(x.shape)
         for l, sx in zip(self.decoder, skips):
             x = l(x + sx)
-            print(x.shape)
         return x
 
 
@@ -161,12 +157,16 @@ class Discriminator(nn.Module):
             sampleTensor = self.layers[-1](sampleTensor)
         size = sampleTensor.shape[1] * sampleTensor.shape[2] * sampleTensor.shape[3]
         self.final = nn.Linear(size, 2)
+        #self.soft = nn.Softmax(dim=-1)
 
     def forward(self, x):
         for l in self.layers:
             x = l(x)
         x = x.view(x.shape[0], -1)
         x = self.final(x)
+        indices = x.argmax(dim=-1)
+        x = x[torch.arange(x.size(0)), indices]
+        x = x.clamp(0, 1)
         return x
 
 
