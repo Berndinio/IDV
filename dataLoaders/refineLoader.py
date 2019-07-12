@@ -39,9 +39,20 @@ class FEIPostDataset(Dataset):
         # source
         poseIdx = idx - entityIdx * 10 + 1
         entityIdx += 1
-        filePath = self.root_dir + "" + str(entityIdx) + "-" + str(poseIdx).zfill(2) + ".jpg"
-        conditionImage = Image.open(filePath)
-        conditionImage = transforms.Resize((self.sampleShape[1], self.sampleShape[2]), interpolation=2)(conditionImage)
+        #source
+        faces = []
+        while len(faces) <= 0:
+            filePath = self.root_dir + "" + str(entityIdx) + "-" + str(poseIdx).zfill(2) + ".jpg"
+            conditionImage = Image.open(filePath)
+            conditionImage = transforms.Resize((self.sampleShape[1], self.sampleShape[2]), interpolation=2)(conditionImage)
+            open_cv_image = np.array(conditionImage)
+            open_cv_image = open_cv_image[:, :, ::-1].copy()
+            faces, rects = self.poseEstimator.predict(open_cv_image)
+            #just go one up, if you cant recognise the face of this one
+            poseIdx = (poseIdx)%10 + 1
+        embeddingCondition = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
+
+
         # target
         faces = []
         while len(faces) <= 0:
@@ -57,12 +68,13 @@ class FEIPostDataset(Dataset):
             mask = self.poseEstimator.generateMask(faces[0], open_cv_image)
         else:
             mask = self.poseEstimator.generateBboxMask(rects[0], open_cv_image)
-        embedding = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
+        embeddingTarget = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
         if self.transform:
             conditionImage = self.transform(conditionImage)
             targetImage = self.transform(targetImage)
 
-        return conditionImage, targetImage, mask, embedding
+        return conditionImage, targetImage, mask, torch.cat((embeddingCondition, embeddingTarget), 0)
+        return conditionImage, targetImage, mask, embeddingTarget
 
 
 if __name__ == "__main__":

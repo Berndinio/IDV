@@ -33,7 +33,7 @@ class Trainer:
         # mode = 1 or 2
         # 1 = With Upsampling (nearest neighbor)
         # 2 = With Deconvolution
-        self.G1 = Generator(numBlocks, (s[0] + 68, s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
+        self.G1 = Generator(numBlocks, (s[0] + 68 * 2, s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
         self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", upsampleType).to(Utils.g_device)
         self.D = Discriminator((s[0] * 2, s[1], s[2])).to(Utils.g_device)
 
@@ -43,7 +43,7 @@ class Trainer:
         :param I_b1:    Generated image (from G1)
         :param I_b:     Target image
         """
-        loss = (I_b1 - I_b) * (0.5 + M_b)
+        loss = (I_b1 - I_b) * (1.0 + M_b)
         loss = torch.sum(torch.abs(loss))
         return loss
 
@@ -159,7 +159,7 @@ class Trainer:
                 for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                     conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                     ran = random.random()
-                    if ran >= 0.3:
+                    if ran >= 0.8:
                         inputs = torch.cat((conditionImages, embeddings), dim=1)
                         # zero the parameter gradients
                         optimizer.zero_grad()
@@ -258,4 +258,4 @@ if __name__ == "__main__":
     #=============================>
     for up in [1]:
         for mask in [1]:
-            Trainer(sample, 6, up, mask).startTraining(50, 2, "factor4_upsampling_bbox")
+            Trainer(sample, 6, up, mask).startTraining(50, 0, "factor4_upsampling_bbox")
