@@ -12,15 +12,19 @@ import numpy as np
 from dataLoaders.refineLoader import FEIPostDataset
 from nets.refineGenerator import Generator, Discriminator
 
+from Utils import Utils
+
+
+
 
 class Trainer:
     def __init__(self, sampleImage, numBlocks):
         self.ceLoss = torch.nn.BCELoss()
         self.sampleImage = sampleImage
         s = sampleImage.shape
-        self.G1 = Generator(numBlocks, (s[0] + 68, s[1], s[2]), "G1", 1)
-        self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", 1)
-        self.D = Discriminator((s[0] * 2, s[1], s[2]))
+        self.G1 = Generator(numBlocks, (s[0] + 68, s[1], s[2]), "G1", 1).to(Utils.g_device)
+        self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", 1).to(Utils.g_device)
+        self.D = Discriminator((s[0] * 2, s[1], s[2])).to(Utils.g_device)
 
     def lossG1(self, I_b1, I_b, M_b):
         """
@@ -49,6 +53,7 @@ class Trainer:
         return loss
 
     def startTraining(self, numEpochs=10):
+
         data_transform = transforms.Compose([
             transforms.ToTensor()
         ])
@@ -57,7 +62,7 @@ class Trainer:
                                  transform=data_transform)
         dataLoader = torch.utils.data.DataLoader(dataset,
                                                  batch_size=1, shuffle=False,
-                                                 num_workers=4)
+                                                 num_workers=1)
         print("Loaded Data")
         # stage 1
         optimizer = torch.optim.Adam(self.G1.parameters(), lr=0.00001, betas=(0.5, 0.999))
@@ -65,6 +70,7 @@ class Trainer:
             print("Running stage 1 training epoch " + str(epoch))
             running_loss = 0
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+                conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                 print(str(i) + "/" + str(len(dataLoader)))
                 inputs = torch.cat((conditionImages, embeddings), dim=1)
                 # zero the parameter gradients
@@ -89,11 +95,11 @@ class Trainer:
                     running_loss = 0.0
                     # save images
                     for x, img in enumerate(outputs):
-                        toSave = transforms.ToPILImage(mode="RGB")(img.data)
+                        toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
                         toSave.save("results/1G-generated"+str(x)+".png")
-                        toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x])
+                        toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x].cpu())
                         toSave.save("results/1G-conditionImages"+str(x)+".png")
-                        toSave = transforms.ToPILImage(mode="RGB")(targetImages[x])
+                        toSave = transforms.ToPILImage(mode="RGB")(targetImages[x].cpu())
                         toSave.save("results/1G-target"+str(x)+".png")
                 continue
 
@@ -104,6 +110,7 @@ class Trainer:
             print("Running stage 2 training epoch " + str(epoch))
             running_loss = 0
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+                conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                 print(str(i) + "/" + str(len(dataLoader)))
                 ran = random.random()
                 if ran >= 0.5:
@@ -147,7 +154,7 @@ class Trainer:
                     # save images
                     for x, img in enumerate(outputs):
                         print(img.min(), img.max())
-                        toSave = transforms.ToPILImage(mode="RGB")(img)
+                        toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
                         toSave.save("results/2G-"+str(x)+".png")
 
 
@@ -155,4 +162,4 @@ if __name__ == "__main__":
     s = (3, 480, 640)
     factor = 2.0
     sample = np.zeros((int(s[0]), int(s[1] / factor), int(s[2] / factor)))
-    Trainer(sample, 5).startTraining()
+    Trainer(sample, 7).startTraining()

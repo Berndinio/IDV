@@ -6,21 +6,22 @@
 
 import torch
 import torch.nn as nn
+from Utils import Utils
 
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channel, linearScaling, last_layer=False):
         super(ResidualBlock, self).__init__()
         self.last_layer = last_layer
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU().to(Utils.g_device)
 
         self.conv1 = nn.Conv2d(in_channel, in_channel + linearScaling, (3, 3), stride=1,
-                               padding=1)
+                               padding=1).to(Utils.g_device)
         self.conv2 = nn.Conv2d(in_channel + linearScaling, in_channel + linearScaling, (3, 3), stride=1,
-                               padding=1)
+                               padding=1).to(Utils.g_device)
         if not self.last_layer:
             self.conv3 = nn.Conv2d(in_channel + linearScaling, in_channel + linearScaling, (3, 3), stride=2,
-                                   padding=1)
+                                   padding=1).to(Utils.g_device)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -44,18 +45,18 @@ class ResidualBlockUp(nn.Module):
         self.mode = mode
 
         # layers
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU().to(Utils.g_device)
 
         self.conv1 = nn.Conv2d(in_channel, in_channel - linearScaling, (3, 3), stride=1,
-                               padding=1)
+                               padding=1).to(Utils.g_device)
         self.conv2 = nn.Conv2d(in_channel - linearScaling, in_channel - linearScaling, (3, 3), stride=1,
-                               padding=1)
+                               padding=1).to(Utils.g_device)
 
         if not self.last_layer:
             self.conv3 = nn.Conv2d(in_channel - linearScaling, in_channel - linearScaling, (1, 1), stride=1,
-                                   padding=0)
+                                   padding=0).to(Utils.g_device)
             self.deconv = nn.ConvTranspose2d(in_channel - linearScaling, in_channel - linearScaling, (2, 2), stride=2,
-                                             padding=0)
+                                             padding=0).to(Utils.g_device)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -85,9 +86,9 @@ class Generator(nn.Module):
     def __init__(self, N, imageSize=(3, 100, 100), flag="G1", mode=2, linearScaling=1):
         super(Generator, self).__init__()
         self.flag = flag
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU().to(Utils.g_device)
         self.mode = mode
-        sampleTensor = torch.zeros(imageSize)
+        sampleTensor = torch.zeros(imageSize).to(Utils.g_device)
         sampleTensor = sampleTensor[None]
 
         # create the N ResidualBlocks and ResidualUpsampleBlocks
@@ -114,10 +115,10 @@ class Generator(nn.Module):
         # One Mid-layer
         if flag == "G1":
             size = int(sampleTensor.shape[1] * sampleTensor.shape[2] * sampleTensor.shape[3])
-            layer = nn.Linear(size, size)
+            layer = nn.Linear(size, size).to(Utils.g_device)
         elif flag == "G2":
             layer = nn.Conv2d(sampleTensor.shape[1], sampleTensor.shape[1], (3, 3), stride=1,
-                              padding=1)
+                              padding=1).to(Utils.g_device)
         self.midLayer = layer
 
         # reverse the decoder
@@ -149,15 +150,14 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.imageSize = imageSize
         self.layers = []
-        sampleTensor = torch.zeros(imageSize)[None]
+        sampleTensor = torch.zeros(imageSize)[None].to(Utils.g_device)
         #4 or 2 are ok ==> 224 neurons or 72 neurons
         while min(sampleTensor.shape[2], sampleTensor.shape[3])>2:
             self.layers.append(nn.Conv2d(sampleTensor.shape[1], sampleTensor.shape[1] + 1,
-                                         (3, 3), stride=2, padding=1))
+                                         (3, 3), stride=2, padding=1).to(Utils.g_device))
             sampleTensor = self.layers[-1](sampleTensor)
         size = sampleTensor.shape[1] * sampleTensor.shape[2] * sampleTensor.shape[3]
-        self.final = nn.Linear(size, 2)
-        #self.soft = nn.Softmax(dim=-1)
+        self.final = nn.Linear(size, 2).to(Utils.g_device)
 
     def forward(self, x):
         for l in self.layers:
