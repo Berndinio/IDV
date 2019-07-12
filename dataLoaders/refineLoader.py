@@ -11,8 +11,7 @@ from torchvision import transforms
 
 from estimators.poseEstimator import FacePoseEstimator
 from Utils import Utils
-
-ffiles = []
+import cv2
 
 
 class FEIPostDataset(Dataset):
@@ -51,7 +50,8 @@ class FEIPostDataset(Dataset):
             #just go one up, if you cant recognise the face of this one
             poseIdx = (poseIdx)%10 + 1
         embeddingCondition = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
-
+        #img_gray = cv2.cvtColor(open_cv_image, cv2.COLOR_BGR2GRAY)
+        #embeddingCondition = torch.Tensor(cv2.Canny(img_gray, 100.0, 250.0))
 
         # target
         faces = []
@@ -69,10 +69,11 @@ class FEIPostDataset(Dataset):
         else:
             mask = self.poseEstimator.generateBboxMask(rects[0], open_cv_image)
         embeddingTarget = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
+
+
         if self.transform:
             conditionImage = self.transform(conditionImage)
             targetImage = self.transform(targetImage)
-
         return conditionImage, targetImage, mask, torch.cat((embeddingCondition, embeddingTarget), 0)
         return conditionImage, targetImage, mask, embeddingTarget
 

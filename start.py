@@ -19,9 +19,19 @@ import matplotlib.pyplot as plt
 
 class Trainer:
     def __init__(self, sampleImage, numBlocks, upsampleType=1, maskType=1):
-        self.ceLoss = torch.nn.BCELoss()
-        self.sampleImage = sampleImage
         s = sampleImage.shape
+
+        # dataset
+        data_transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+        self.dataset = FEIPostDataset(root="dataset/FEI/", sampleShape=s,
+                                 maskType=maskType, transform=data_transform)
+        conditionImage, targetImage, mask, embeddings = self.dataset[0]
+        print("Dataset shapes: ", conditionImage.shape, targetImage.shape, mask.shape, embeddings.shape)
+        #some variables
+        self.ceLoss = torch.nn.BCELoss()
+        self.sampleImage = conditionImage
         self.upsampleType = upsampleType
         self.maskType = maskType
         # maskType = 0 or 1
@@ -33,9 +43,10 @@ class Trainer:
         # mode = 1 or 2
         # 1 = With Upsampling (nearest neighbor)
         # 2 = With Deconvolution
-        self.G1 = Generator(numBlocks, (s[0] + 68 * 2, s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
+        self.G1 = Generator(numBlocks, (s[0] + embeddings.shape[0], s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
         self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", upsampleType).to(Utils.g_device)
-        self.D = Discriminator((s[0] * 2, s[1]-2, s[2]-2)).to(Utils.g_device)
+        self.cutOff = 4
+        self.D = Discriminator((s[0] * 2, s[1]-self.cutOff, s[2]-self.cutOff)).to(Utils.g_device)
 
     def lossG1(self, I_b1, I_b, M_b):
         """
@@ -67,14 +78,7 @@ class Trainer:
         """
         :param maskType:    0=Landmark, 1=BBox
         """
-
-        data_transform = transforms.Compose([
-            transforms.ToTensor()
-        ])
-
-        dataset = FEIPostDataset(root="dataset/FEI/", sampleShape=self.sampleImage.shape,
-                                 maskType=self.maskType, transform=data_transform)
-        dataLoader = torch.utils.data.DataLoader(dataset,
+        dataLoader = torch.utils.data.DataLoader(self.dataset,
                                                  batch_size=4, shuffle=True,
                                                  num_workers=4)
         print("Loaded Data")
@@ -159,7 +163,7 @@ class Trainer:
                 for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                     conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                     ran = random.random()
-                    if ran >= 0.8:
+                    if ran >= 0.7 and epoch>0:
                         inputs = torch.cat((conditionImages, embeddings), dim=1)
                         # zero the parameter gradients
                         optimizer.zero_grad()
@@ -181,7 +185,7 @@ class Trainer:
                         condition = conditionImages
                         targetDecision = torch.ones((condition.shape[0], 1)).to(Utils.g_device)
 
-                    discriminatorPair = torch.cat((generated[:, :, 2:-2, 2:-2], condition[:, :, 2:-2, 2:-2]), dim=1)
+                    discriminatorPair = torch.cat((generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff], condition[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]), dim=1)
                     decision = self.D(discriminatorPair)
                     # loss of D
                     loss = self.lossD(decision, targetDecision).to(Utils.g_device)
@@ -202,8 +206,6 @@ class Trainer:
                         for x, img in enumerate(generated):
                             toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
                             toSave.save(folderPath+"2G-generated-fromG2-"+str(x)+".png")
-                            toSave = transforms.ToPILImage(mode="RGB")(outputs[x].cpu())
-                            toSave.save(folderPath+"2G-generated-fromG1-"+str(x)+".png")
                 epochLosses.append(allLossInEpoch/(len(dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
                 plt.plot(epochLosses)
                 plt.title(mType+" "+up)
@@ -264,4 +266,4 @@ if __name__ == "__main__":
     #=============================>
     for up in [1]:
         for mask in [1]:
-            Trainer(sample, 6, up, mask).startTraining(50, 0, "factor4_upsampling_bbox")
+            Trainer(sample, 6, up, mask).startTraining(1, 0, "BBox_upsample")
