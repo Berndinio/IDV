@@ -35,7 +35,7 @@ class Trainer:
         # 2 = With Deconvolution
         self.G1 = Generator(numBlocks, (s[0] + 68 * 2, s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
         self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", upsampleType).to(Utils.g_device)
-        self.D = Discriminator((s[0] * 2, s[1], s[2])).to(Utils.g_device)
+        self.D = Discriminator((s[0] * 2, s[1]-2, s[2]-2)).to(Utils.g_device)
 
     def lossG1(self, I_b1, I_b, M_b):
         """
@@ -75,7 +75,7 @@ class Trainer:
         dataset = FEIPostDataset(root="dataset/FEI/", sampleShape=self.sampleImage.shape,
                                  maskType=self.maskType, transform=data_transform)
         dataLoader = torch.utils.data.DataLoader(dataset,
-                                                 batch_size=4, shuffle=False,
+                                                 batch_size=4, shuffle=True,
                                                  num_workers=4)
         print("Loaded Data")
 
@@ -181,7 +181,7 @@ class Trainer:
                         condition = conditionImages
                         targetDecision = torch.ones((condition.shape[0], 1)).to(Utils.g_device)
 
-                    discriminatorPair = torch.cat((generated, condition), dim=1)
+                    discriminatorPair = torch.cat((generated[:, :, 2:-2, 2:-2], condition[:, :, 2:-2, 2:-2]), dim=1)
                     decision = self.D(discriminatorPair)
                     # loss of D
                     loss = self.lossD(decision, targetDecision).to(Utils.g_device)
@@ -204,10 +204,6 @@ class Trainer:
                             toSave.save(folderPath+"2G-generated-fromG2-"+str(x)+".png")
                             toSave = transforms.ToPILImage(mode="RGB")(outputs[x].cpu())
                             toSave.save(folderPath+"2G-generated-fromG1-"+str(x)+".png")
-                            toSave = transforms.ToPILImage(mode="RGB")(condition[x].cpu())
-                            toSave.save(folderPath+"2G-conditionImages-"+str(x)+".png")
-                            toSave = transforms.ToPILImage(mode="RGB")(targetImages[x].cpu())
-                            toSave.save(folderPath+"2G-target-"+str(x)+".png")
                 epochLosses.append(allLossInEpoch/(len(dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
                 plt.plot(epochLosses)
                 plt.title(mType+" "+up)
@@ -242,7 +238,7 @@ class Trainer:
 
                 for x, img in enumerate(generated):
                     toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
-                    toSave.save(folderPath+"x-generated-fromG2-"+str(i*100+x)+".png")
+                    toSave.save(folderPath+"x-generated-fromG2-"+str(x)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(outputs[x].cpu())
                     toSave.save(folderPath+"x-generated-fromG1-"+str(x)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x].cpu())
