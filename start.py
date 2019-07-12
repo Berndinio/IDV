@@ -18,8 +18,8 @@ class Trainer:
         self.ceLoss = torch.nn.BCELoss()
         self.sampleImage = sampleImage
         s = sampleImage.shape
-        self.G1 = Generator(numBlocks, (s[0] + 68, s[1], s[2]), "G1", 2)
-        self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", 2)
+        self.G1 = Generator(numBlocks, (s[0] + 68, s[1], s[2]), "G1", 1)
+        self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", 1)
         self.D = Discriminator((s[0] * 2, s[1], s[2]))
 
     def lossG1(self, I_b1, I_b, M_b):
@@ -56,12 +56,12 @@ class Trainer:
         dataset = FEIPostDataset(root="dataset/FEI/", sampleShape=self.sampleImage.shape,
                                  transform=data_transform)
         dataLoader = torch.utils.data.DataLoader(dataset,
-                                                 batch_size=4, shuffle=True,
+                                                 batch_size=1, shuffle=False,
                                                  num_workers=4)
         print("Loaded Data")
         # stage 1
         optimizer = torch.optim.Adam(self.G1.parameters(), lr=0.00001, betas=(0.5, 0.999))
-        for epoch in range(numEpochs):
+        for epoch in range(numEpochs+100):
             print("Running stage 1 training epoch " + str(epoch))
             running_loss = 0
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
@@ -71,7 +71,11 @@ class Trainer:
                 optimizer.zero_grad()
                 # forward + backward + optimize
                 outputs = self.G1(inputs)
+
                 outputs = outputs[:, 34:37]
+                print("Input", inputs.type(), inputs.min(), inputs.max(), inputs.shape)
+                print("Target", targetImages.type(), targetImages.min(), targetImages.max(), targetImages.shape)
+                print("Output", outputs.type(), outputs.data.min(), outputs.data.max(), outputs.shape)
                 loss = self.lossG1(outputs, targetImages, masks)
                 loss.backward()
                 optimizer.step()
@@ -79,10 +83,19 @@ class Trainer:
                 # print statistics
                 running_loss += loss.item()
 
-                if i % 10 == 9:  # print every 2000 mini-batches
+                if i % 1 == 0:  # print every 2000 mini-batches
                     print('[%d, %5d] loss: %.3f' %
                           (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
+                    # save images
+                    for x, img in enumerate(outputs):
+                        toSave = transforms.ToPILImage(mode="RGB")(img.data)
+                        toSave.save("results/1G-generated"+str(x)+".png")
+                        toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x])
+                        toSave.save("results/1G-conditionImages"+str(x)+".png")
+                        toSave = transforms.ToPILImage(mode="RGB")(targetImages[x])
+                        toSave.save("results/1G-target"+str(x)+".png")
+                continue
 
         # stage 2
         optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.00001,
@@ -131,10 +144,15 @@ class Trainer:
                     print('[%d, %5d] loss: %.3f' %
                           (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
+                    # save images
+                    for x, img in enumerate(outputs):
+                        print(img.min(), img.max())
+                        toSave = transforms.ToPILImage(mode="RGB")(img)
+                        toSave.save("results/2G-"+str(x)+".png")
 
 
 if __name__ == "__main__":
     s = (3, 480, 640)
-    factor = 4.0
+    factor = 2.0
     sample = np.zeros((int(s[0]), int(s[1] / factor), int(s[2] / factor)))
-    Trainer(sample, 6).startTraining()
+    Trainer(sample, 5).startTraining()

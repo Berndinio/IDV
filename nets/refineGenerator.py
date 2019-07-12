@@ -70,7 +70,7 @@ class ResidualBlockUp(nn.Module):
             if self.mode == 2:
                 x = self.deconv(x)
                 x = self.relu(x)
-                x = nn.functional.interpolate(x, size=self.outputSize)
+                #x = nn.functional.interpolate(x, size=self.outputSize)
         return x
 
 
