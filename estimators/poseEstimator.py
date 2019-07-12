@@ -12,7 +12,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-
 class FacePoseEstimator:
     def __init__(self):
         # initialize dlib's face detector (HOG-based) and then create
@@ -25,7 +24,7 @@ class FacePoseEstimator:
         # reshape?
         height, width = image.shape[0], image.shape[1]
         tmpImage = copy.deepcopy(image)
-        # image = imutils.resize(image, width=500)
+        #image = imutils.resize(image, width=500)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         rects = self.detector(gray, 1)
         if len(rects) > 0:
@@ -44,7 +43,7 @@ class FacePoseEstimator:
         return faces, rects
 
     def generateMask(self, keyPoints, cv_image, save=False):
-        image_new = np.zeros((cv_image.shape[0], cv_image.shape[1]), dtype=np.uint8)
+        image_new = np.zeros((cv_image.shape[0], cv_image.shape[1]), dtype=np.float)
         sliced = keyPoints[slice(0, 17, 1)] + keyPoints[slice(26, 16, -1)]
         sliced = np.array([sliced])
         cv2.fillPoly(image_new, sliced, 1)
@@ -65,7 +64,7 @@ class FacePoseEstimator:
         return torch.Tensor(image_new)
 
     def generatePoseEmbedding(self, keypoints, image, save=False):
-        heatmaps = np.zeros((len(keypoints), image.shape[0], image.shape[1]), dtype=np.uint8)
+        heatmaps = np.zeros((len(keypoints), image.shape[0], image.shape[1]), dtype=np.float)
         for i, p in enumerate(keypoints):
             cv2.circle(heatmaps[i], p, 5, 1, thickness=-1, lineType=cv2.FILLED)
         if save:
@@ -74,15 +73,16 @@ class FacePoseEstimator:
                 img.save("estimators/images/HM" + str(i) + ".png")
         return torch.Tensor(heatmaps)
 
-    def generateBboxMask(self, bbox, image, save=False):
-        image_new = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+    def generateBboxMask(self, bbox, cv_image, save=False):
+        image_new = np.zeros((cv_image.shape[0], cv_image.shape[1]), dtype=np.float)
         center = (int(bbox.left() + bbox.width() / 2.0),
                   int(bbox.top() + bbox.height() / 2.0 - 0.1 * bbox.height()))
-        cv2.ellipse(image_new, center, (int(bbox.width() * 0.7), int(bbox.height() * 0.8)), 0, 0, 360, 1, thickness=-1,
+        cv2.ellipse(image_new, center, (int(bbox.width() * 1.5), int(bbox.height() * 1.2)), 0, 0, 360, 1, thickness=-1,
                     lineType=cv2.FILLED)
         if save:
             img = Image.fromarray(image_new * 255, 'L')
             img.save('estimators/images/faceMaskBox.png')
+        image_new = np.repeat(image_new[None], cv_image.shape[2], axis=0)
         return torch.Tensor(image_new)
 
     def predictPose(self, im, keypoints):
@@ -176,7 +176,7 @@ class BodyPoseEstimator:
         return points
 
     def generateMask(self, keyPoints, imageShape, save=False):
-        image = np.zeros(imageShape, dtype=np.uint8)
+        image = np.zeros(imageShape, dtype=np.float)
         # draw polygons
         polygons = [[], []]
         for i in [16, 15, 17, 1]:

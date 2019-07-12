@@ -71,7 +71,6 @@ class ResidualBlockUp(nn.Module):
             if self.mode == 2:
                 x = self.deconv(x)
                 x = self.relu(x)
-                #x = nn.functional.interpolate(x, size=self.outputSize)
         return x
 
 
@@ -90,14 +89,16 @@ class Generator(nn.Module):
         self.mode = mode
         sampleTensor = torch.zeros(imageSize).to(Utils.g_device)
         sampleTensor = sampleTensor[None]
+        self.encoder = []
+        self.decoder = []
+        self.midLayer = None
 
         # create the N ResidualBlocks and ResidualUpsampleBlocks
-
-        self.encoder = [ResidualBlock(sampleTensor.shape[1], linearScaling, False)]
+        self.encoder.append(ResidualBlock(sampleTensor.shape[1], linearScaling, False))
         out = sampleTensor[0, 0].shape
         sampleTensor = self.encoder[-1](sampleTensor)
 
-        self.decoder = [ResidualBlockUp(sampleTensor.shape[1], linearScaling, False, self.mode, out)]
+        self.decoder.append(ResidualBlockUp(sampleTensor.shape[1], linearScaling, False, self.mode, out))
         for i in range(N - 2):
             layer = ResidualBlock(sampleTensor.shape[1], linearScaling)
             self.encoder.append(layer)
@@ -124,6 +125,9 @@ class Generator(nn.Module):
         # reverse the decoder
         self.decoder.reverse()
 
+        #add modules to parameters
+        self.allLayers = nn.ModuleList(self.encoder + self.decoder)
+
     def forward(self, x):
         skips = []
         # encoder
@@ -141,6 +145,10 @@ class Generator(nn.Module):
         # decoder
         skips.reverse()
         for l, sx in zip(self.decoder, skips):
+            if(x.shape[-1]!=sx.shape[-1]):
+                x = x[:,:,:,:-1]
+            if(x.shape[-2]!=sx.shape[-2]):
+                x = x[:,:,:-1,:]
             x = l(x + sx)
         return x
 
@@ -158,6 +166,9 @@ class Discriminator(nn.Module):
             sampleTensor = self.layers[-1](sampleTensor)
         size = sampleTensor.shape[1] * sampleTensor.shape[2] * sampleTensor.shape[3]
         self.final = nn.Linear(size, 2).to(Utils.g_device)
+
+        #add modules to parameters
+        self.allLayers = nn.ModuleList(self.layers)
 
     def forward(self, x):
         for l in self.layers:

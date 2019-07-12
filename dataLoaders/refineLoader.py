@@ -16,11 +16,12 @@ ffiles = []
 
 
 class FEIPostDataset(Dataset):
-    def __init__(self, root, sampleShape, transform=None):
+    def __init__(self, root, sampleShape, maskType, transform=None):
         self.root_dir = root
         self.transform = transform
         self.sampleShape = sampleShape
         self.files = None
+        self.maskType = maskType
         for root, dirs, files in os.walk(self.root_dir):
             self.files = files
             if ".keep" in self.files:
@@ -52,7 +53,10 @@ class FEIPostDataset(Dataset):
             open_cv_image = np.array(targetImage)
             open_cv_image = open_cv_image[:, :, ::-1].copy()
             faces, rects = self.poseEstimator.predict(open_cv_image)
-        mask = self.poseEstimator.generateMask(faces[0], open_cv_image)
+        if self.maskType == 0:
+            mask = self.poseEstimator.generateMask(faces[0], open_cv_image)
+        else:
+            mask = self.poseEstimator.generateBboxMask(rects[0], open_cv_image)
         embedding = self.poseEstimator.generatePoseEmbedding(faces[0], open_cv_image)
         if self.transform:
             conditionImage = self.transform(conditionImage)
