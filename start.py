@@ -242,7 +242,17 @@ class Trainer:
 
                 for x, img in enumerate(generated):
                     toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
-                    toSave.save(folderPath+"generated-"+str(i*100+x)+".png")
+                    toSave.save(folderPath+"x-generated-fromG2-"+str(i*100+x)+".png")
+                    toSave = transforms.ToPILImage(mode="RGB")(outputs[x].cpu())
+                    toSave.save(folderPath+"x-generated-fromG1-"+str(x)+".png")
+                    toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x].cpu())
+                    toSave.save(folderPath+"x-generated-conditionImages-"+str(x)+".png")
+                    toSave = transforms.ToPILImage(mode="RGB")(targetImages[x].cpu())
+                    toSave.save(folderPath+"x-generated-target-"+str(x)+".png")
+                    toSave = transforms.ToPILImage(mode="RGB")(outputs2[x].cpu())
+                    toSave.save(folderPath+"x-generated-diff-"+str(x)+".png")
+                if i==2:
+                    break
 
 if __name__ == "__main__":
     s = (3, 480, 640)
