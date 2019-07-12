@@ -77,7 +77,7 @@ class FacePoseEstimator:
         image_new = np.zeros((cv_image.shape[0], cv_image.shape[1]), dtype=np.float)
         center = (int(bbox.left() + bbox.width() / 2.0),
                   int(bbox.top() + bbox.height() / 2.0 - 0.1 * bbox.height()))
-        cv2.ellipse(image_new, center, (int(bbox.width() * 1.5), int(bbox.height() * 1.2)), 0, 0, 360, 1, thickness=-1,
+        cv2.ellipse(image_new, center, (int(bbox.width() * 1.0), int(bbox.height() * 0.8)), 0, 0, 360, 1, thickness=-1,
                     lineType=cv2.FILLED)
         if save:
             img = Image.fromarray(image_new * 255, 'L')
