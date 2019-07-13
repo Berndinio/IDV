@@ -38,7 +38,7 @@ class FacePoseEstimator:
                 image = tmpImage
                 for i, (x, y) in enumerate(faces[0]):
                     cv2.circle(image, (int(x), int(y)), 6, (0, 255, 255), thickness=-1, lineType=cv2.FILLED)
-                    cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
+                    #cv2.putText(image, "{}".format(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3)
                 cv2.imwrite("estimators/images/faceKeypoints.jpg", image)
         return faces, rects
 
@@ -71,6 +71,8 @@ class FacePoseEstimator:
             for i in range(len(keypoints)):
                 img = Image.fromarray(heatmaps[i].astype(np.uint8) * 255, 'L')
                 img.save("estimators/images/HM" + str(i) + ".png")
+            img = Image.fromarray(np.sum(heatmaps, axis=0).astype(np.uint8) * 255, 'L')
+            img.save("estimators/images/HMall.png")
         return torch.Tensor(heatmaps)
 
     def generateBboxMask(self, bbox, cv_image, save=False):
