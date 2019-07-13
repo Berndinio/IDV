@@ -163,10 +163,11 @@ class Trainer:
                 for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                     conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                     ran = random.random()
-                    if ran >= 0.7 and epoch>0:
+                    optimizer.zero_grad()
+
+                    if ran >= 0.5 and epoch>1:
                         inputs = torch.cat((conditionImages, embeddings), dim=1)
                         # zero the parameter gradients
-                        optimizer.zero_grad()
 
                         # forward things
                         outputs = self.G1(inputs)
@@ -178,12 +179,12 @@ class Trainer:
                         # generate fake Pair
                         generated = outputs3
                         condition = conditionImages
-                        targetDecision = torch.zeros((condition.shape[0], 1)).to(Utils.g_device)
+                        targetDecision = torch.zeros((condition.shape[0])).to(Utils.g_device)
                     else:
                         # generate real pair
                         generated = targetImages
                         condition = conditionImages
-                        targetDecision = torch.ones((condition.shape[0], 1)).to(Utils.g_device)
+                        targetDecision = torch.ones((condition.shape[0])).to(Utils.g_device)
 
                     discriminatorPair = torch.cat((
                             generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff],
@@ -192,8 +193,8 @@ class Trainer:
                     # loss of D
                     loss = self.lossD(decision, targetDecision).to(Utils.g_device)
                     # loss of G2
-                    if targetDecision[0, 0] == 0:
-                        loss = loss + self.lossG2(generated, targetImages, masks, decision, lamb=2)
+                    if targetDecision[0] == 0:
+                        loss += self.lossG2(generated, targetImages, masks, decision, lamb=1.0)
                     loss.backward()
                     optimizer.step()
 
@@ -268,4 +269,4 @@ if __name__ == "__main__":
     #=============================>
     for up in [1]:
         for mask in [1]:
-            Trainer(sample, 6, up, mask).startTraining(1, 0, "BBox_upsample")
+            Trainer(sample, 6, up, mask).startTraining(20, 1, "4_border_removed")
