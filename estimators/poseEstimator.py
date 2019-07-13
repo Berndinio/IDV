@@ -58,7 +58,7 @@ class FacePoseEstimator:
             cv2.line(image_new, keyPoints[idx1], keyPoints[idx2], 1, width)
 
         if save:
-            img = Image.fromarray(image_new * 255, 'L')
+            img = Image.fromarray(image_new.astype(np.uint8) * 255, 'L')
             img.save('estimators/images/faceMask.png')
         image_new = np.repeat(image_new[None], cv_image.shape[2], axis=0)
         return torch.Tensor(image_new)
@@ -69,7 +69,7 @@ class FacePoseEstimator:
             cv2.circle(heatmaps[i], p, 5, 1, thickness=-1, lineType=cv2.FILLED)
         if save:
             for i in range(len(keypoints)):
-                img = Image.fromarray(heatmaps[i] * 255, 'L')
+                img = Image.fromarray(heatmaps[i].astype(np.uint8) * 255, 'L')
                 img.save("estimators/images/HM" + str(i) + ".png")
         return torch.Tensor(heatmaps)
 
@@ -80,7 +80,7 @@ class FacePoseEstimator:
         cv2.ellipse(image_new, center, (int(bbox.width() * 1.0), int(bbox.height() * 0.8)), 0, 0, 360, 1, thickness=-1,
                     lineType=cv2.FILLED)
         if save:
-            img = Image.fromarray(image_new * 255, 'L')
+            img = Image.fromarray(image_new.astype(np.uint8) * 255, 'L')
             img.save('estimators/images/faceMaskBox.png')
         image_new = np.repeat(image_new[None], cv_image.shape[2], axis=0)
         return torch.Tensor(image_new)
@@ -199,7 +199,7 @@ class BodyPoseEstimator:
                 cv2.line(image, keyPoints[idx1], keyPoints[idx2], 1, width)
         # save it
         if save:
-            img = Image.fromarray(image * 255, 'L')
+            img = Image.fromarray(image.astype(np.uint8) * 255, 'L')
             img.save('estimators/images/bodyMask.png')
         return torch.Tensor(image)
 
@@ -220,7 +220,7 @@ if __name__ == "__main__":
             ffiles.remove(".keep")
         continue
     face = FacePoseEstimator()
-    for file in ffiles:
+    for i, file in enumerate(ffiles):
         path = root + "/" + file
         print("Processing " + path)
         image = cv2.imread(path)
@@ -234,3 +234,5 @@ if __name__ == "__main__":
             embedding = face.generatePoseEmbedding(faces[0], image, True)
         else:
             print("ERROR with " + path)
+        if(i==2):
+            break
