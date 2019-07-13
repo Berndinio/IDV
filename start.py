@@ -185,7 +185,9 @@ class Trainer:
                         condition = conditionImages
                         targetDecision = torch.ones((condition.shape[0], 1)).to(Utils.g_device)
 
-                    discriminatorPair = torch.cat((generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff], condition[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]), dim=1)
+                    discriminatorPair = torch.cat((
+                            generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff],
+                            condition[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]), dim=1)
                     decision = self.D(discriminatorPair)
                     # loss of D
                     loss = self.lossD(decision, targetDecision).to(Utils.g_device)
