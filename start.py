@@ -11,6 +11,7 @@ import numpy as np
 
 from dataLoaders.refineLoader import FEIPostDataset
 from nets.refineGenerator import Generator, Discriminator
+from skimage.measure import compare_ssim as ssim
 
 from Utils import Utils
 import matplotlib.pyplot as plt
@@ -146,11 +147,11 @@ class Trainer:
                     torch.save(self.G1, folderPath+"G1-"+("%.3f"%epochLosses[-1])+"-"+str(epoch)+".pt")
             torch.save(self.G1, folderPath+"G1-"+("%.3f"%epochLosses[-1])+"-"+str(numEpochs)+".pt")
         else:
-            print("Loading G1", "results/"+loaderPrefix+"/G1.pt")
-            self.G1 = torch.load("results/"+loaderPrefix+"/G1.pt")
+            print("Loading G1", "results/"+loaderPrefix+"G1.pt")
+            self.G1 = torch.load("results/"+loaderPrefix+"G1.pt")
         # stage 1
         if(trainingStage <= 1):
-            optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.00001,
+            optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.000002,
                                          betas=(0.5, 0.999))
             epochLosses = []
             lamb = 1.0
@@ -166,7 +167,7 @@ class Trainer:
                     ran = random.random()
                     optimizer.zero_grad()
 
-                    if ran >= 0.5 and epoch>1:
+                    if ran >= 0.5 and epoch>=1:
                         inputs = torch.cat((conditionImages, embeddings), dim=1)
                         # zero the parameter gradients
 
@@ -176,7 +177,7 @@ class Trainer:
                         outputs2 = self.G2(inputs2)
                         outputs3 = outputs2 + outputs
                         # generate fake Pair
-                        generated = outputs3
+                        generated = outputs3.clamp(0.0, 1.0)
                         condition = conditionImages
                         targetDecision = torch.zeros((condition.shape[0])).to(Utils.g_device)
                     else:
@@ -228,15 +229,16 @@ class Trainer:
             torch.save(self.G2, folderPath+"G2-"+("%.3f"%epochLosses[-1])+"-"+str(numEpochs)+".pt")
             torch.save(self.D, folderPath+"D-"+("%.3f"%epochLosses[-1])+"-"+str(epoch)+".pt")
         else:
-            print("Loading G2 and D", "results/"+loaderPrefix+"/G2.pt", "results/"+loaderPrefix+"/D.pt")
-            self.G2 = torch.load("results/"+loaderPrefix+"/G2.pt")
-            self.D = torch.load("results/"+loaderPrefix+"/D.pt")
+            print("Loading G2 and D", "results/"+loaderPrefix+"G2.pt", "results/"+loaderPrefix+"D.pt")
+            self.G2 = torch.load("results/"+loaderPrefix+"G2.pt")
+            #self.D = torch.load("results/"+loaderPrefix+"D.pt")
         # stage 2 ==> just generate some
         if(trainingStage <= 2):
             print("Running stage 3. Generating...")
             import os
             if not os.path.exists(folderPath):
                 os.makedirs(folderPath)
+            finalString = "SSIM RGB-Loss\n"
             for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
                 conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                 inputs = torch.cat((conditionImages, embeddings), dim=1)
@@ -246,7 +248,15 @@ class Trainer:
                 inputs2 = torch.cat((conditionImages, outputs), dim=1)
                 outputs2 = self.G2(inputs2)
                 generated = outputs2 + outputs
-                generated = generated
+                generated = generated.clamp(0.0, 1.0)
+                if not (self.cutOff == 0):
+                    outputs = outputs[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+                    inputs2 = inputs2[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+                    outputs2 = outputs2[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+                    generated = generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+                    conditionImages = conditionImages[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+                    targetImages = targetImages[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]
+
 
                 for x, img in enumerate(generated):
                     toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
@@ -259,10 +269,44 @@ class Trainer:
                     toSave.save(folderPath+"x-generated-target-"+str(x)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(outputs2[x].cpu())
                     toSave.save(folderPath+"x-generated-diff-"+str(x)+".png")
+
+                    sourceImg, generatedImg1, generatedImg2, targetImage = \
+                                torch.transpose(conditionImages[x].cpu(), 0, 1), \
+                                torch.transpose(outputs[x].cpu(), 0, 1), \
+                                torch.transpose(img.cpu(), 0, 1), \
+                                torch.transpose(targetImages[x].cpu(), 0, 1)
+                    sourceImg, generatedImg1, generatedImg2, targetImage = \
+                                torch.transpose(sourceImg, 1, 2), \
+                                torch.transpose(generatedImg1, 1, 2), \
+                                torch.transpose(generatedImg2, 1, 2), \
+                                torch.transpose(targetImage, 1, 2)
+                    sourceImg, generatedImg1, generatedImg2, targetImage = \
+                                sourceImg.detach().numpy(), \
+                                generatedImg1.detach().numpy(), \
+                                generatedImg2.detach().numpy(), \
+                                targetImage.detach().numpy()
+
+                    finalString += str(ssim(sourceImg, targetImage, data_range=1.0, multichannel=True))+ ","
+                    finalString += str(ssim(generatedImg1, targetImage, data_range=1.0, multichannel=True))+ ","
+                    finalString += str(ssim(generatedImg2, targetImage, data_range=1.0, multichannel=True))+ ","
+                    finalString += str(np.sum(np.abs(generatedImg2 - targetImage))/(generatedImg2.shape[0]*generatedImg2.shape[1]*generatedImg2.shape[2])) + "\n"
                 if i==2:
+                    f = open(folderPath+"results.txt", "w")
+                    f.write(finalString)
+                    f.close()
                     break
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('-stage', type=int, default=0,
+                       help='Which stage to start at.')
+    parser.add_argument('-epochs', type=int, default=30,
+                       help='Number of epochs')
+    args = parser.parse_args()
+
+
     s = (3, 480, 640)
     factor = 4.0
     sample = np.zeros((int(s[0]), int(s[1] / factor), int(s[2] / factor)))
@@ -276,4 +320,5 @@ if __name__ == "__main__":
     #=============================>
     for up in [1]:
         for mask in [1]:
-            Trainer(sample, 5, up, mask).startTraining(30, 0, "BBox_upsample")
+            #Trainer(sample, 5, up, mask).startTraining(30, 1, "BBox_upsample/")
+            Trainer(sample, 6, up, mask).startTraining(args.epochs, args.stage, "")
