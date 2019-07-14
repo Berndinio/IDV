@@ -43,8 +43,9 @@ class Trainer:
         # mode = 1 or 2
         # 1 = With Upsampling (nearest neighbor)
         # 2 = With Deconvolution
-        self.G1 = Generator(numBlocks, (s[0] + embeddings.shape[0], s[1], s[2]), "G1", upsampleType).to(Utils.g_device)
-        self.G2 = Generator(numBlocks, (s[0] * 2, s[1], s[2]), "G2", upsampleType).to(Utils.g_device)
+        #######Generator(N, imageSize=(3, 100, 100), flag="G1", mode=2, linearScaling=1, residual=True)
+        self.G1 = Generator(numBlocks, (s[0] + embeddings.shape[0], s[1], s[2]), "G1", upsampleType, 16, True).to(Utils.g_device)
+        self.G2 = Generator(numBlocks-2, (s[0] * 2, s[1], s[2]), "G2", upsampleType, 3, True).to(Utils.g_device)
         self.cutOff = 4
         self.D = Discriminator((s[0] * 2, s[1]-self.cutOff, s[2]-self.cutOff)).to(Utils.g_device)
 
@@ -71,7 +72,7 @@ class Trainer:
         :param I_b:     Target image
         """
         loss = lamb * self.lossG1(I_b2, I_b, M_b)
-        loss += self.ceLoss(outD.float().to(Utils.g_device), torch.ones(outD.shape).float().to(Utils.g_device))
+        loss = loss + self.ceLoss(outD.float().to(Utils.g_device), torch.ones(outD.shape).float().to(Utils.g_device))
         return loss
 
     def startTraining(self, numEpochs=10, trainingStage=0, loaderPrefix="factor4_upsampling_bbox"):
@@ -114,7 +115,6 @@ class Trainer:
                     # forward + backward + optimize
                     outputs = self.G1(inputs)
 
-                    outputs = outputs[:, :3]
                     loss = self.lossG1(outputs, targetImages, masks)
                     loss.backward()
                     optimizer.step()
@@ -127,7 +127,7 @@ class Trainer:
                         running_loss = 0
                     if i % 20 == 0 and not i == 0:  # print every 2000 mini-batches
                         print('[%d, %5d] loss: %.3f' %
-                              (epoch + 1, i + 1, running_loss / 2000))
+                              (epoch + 1, (i + 1)/len(dataLoader)*100.0, running_loss / 2000))
                         running_loss = 0.0
                         # save images
                         for x, img in enumerate(outputs):
@@ -146,13 +146,14 @@ class Trainer:
                     torch.save(self.G1, folderPath+"G1-"+("%.3f"%epochLosses[-1])+"-"+str(epoch)+".pt")
             torch.save(self.G1, folderPath+"G1-"+("%.3f"%epochLosses[-1])+"-"+str(numEpochs)+".pt")
         else:
-            print("Loading G1")
+            print("Loading G1", "results/"+loaderPrefix+"/G1.pt")
             self.G1 = torch.load("results/"+loaderPrefix+"/G1.pt")
         # stage 1
         if(trainingStage <= 1):
             optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.00001,
                                          betas=(0.5, 0.999))
             epochLosses = []
+            lamb = 1.0
             for epoch in range(numEpochs):
                 print("Running stage 2 training epoch " + str(epoch)+"/"+str(numEpochs))
                 running_loss = 0
@@ -171,10 +172,8 @@ class Trainer:
 
                         # forward things
                         outputs = self.G1(inputs)
-                        outputs = outputs[:, :3]
                         inputs2 = torch.cat((conditionImages, outputs), dim=1)
                         outputs2 = self.G2(inputs2)
-                        outputs2 = outputs2[:, 1:4]
                         outputs3 = outputs2 + outputs
                         # generate fake Pair
                         generated = outputs3
@@ -186,15 +185,21 @@ class Trainer:
                         condition = conditionImages
                         targetDecision = torch.ones((condition.shape[0])).to(Utils.g_device)
 
-                    discriminatorPair = torch.cat((
-                            generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff],
-                            condition[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]), dim=1)
+                    if(self.cutOff == 0):
+                        discriminatorPair = torch.cat((
+                                generated,
+                                condition), dim=1)
+                    else:
+                        discriminatorPair = torch.cat((
+                                generated[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff],
+                                condition[:, :, self.cutOff:-self.cutOff, self.cutOff:-self.cutOff]), dim=1)
                     decision = self.D(discriminatorPair)
                     # loss of D
                     loss = self.lossD(decision, targetDecision).to(Utils.g_device)
                     # loss of G2
                     if targetDecision[0] == 0:
-                        loss += self.lossG2(generated, targetImages, masks, decision, lamb=1.0)
+                        #lamb *= 0.999
+                        loss += self.lossG2(generated, targetImages, masks, decision, lamb=lamb)
                     loss.backward()
                     optimizer.step()
 
@@ -203,12 +208,15 @@ class Trainer:
                     allLossInEpoch += loss.item()
                     if i % 20 == 0 and not i == 0:  # print every 2000 mini-batches
                         print('[%d, %5d] loss: %.3f' %
-                              (epoch + 1, i + 1, running_loss / 2000))
+                              (epoch + 1, (i + 1)/len(dataLoader)*100.0, running_loss / 2000))
                         running_loss = 0.0
                         # save images
                         for x, img in enumerate(generated):
                             toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
                             toSave.save(folderPath+"2G-generated-fromG2-"+str(x)+".png")
+                            if targetDecision[0] == 0:
+                                toSave = transforms.ToPILImage(mode="RGB")(outputs2[x].cpu())
+                                toSave.save(folderPath+"2G-generated-diff-"+str(x)+".png")
                 epochLosses.append(allLossInEpoch/(len(dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
                 plt.plot(epochLosses)
                 plt.title(mType+" "+up)
@@ -220,7 +228,7 @@ class Trainer:
             torch.save(self.G2, folderPath+"G2-"+("%.3f"%epochLosses[-1])+"-"+str(numEpochs)+".pt")
             torch.save(self.D, folderPath+"D-"+("%.3f"%epochLosses[-1])+"-"+str(epoch)+".pt")
         else:
-            print("Loading G2 and D")
+            print("Loading G2 and D", "results/"+loaderPrefix+"/G2.pt", "results/"+loaderPrefix+"/D.pt")
             self.G2 = torch.load("results/"+loaderPrefix+"/G2.pt")
             self.D = torch.load("results/"+loaderPrefix+"/D.pt")
         # stage 2 ==> just generate some
@@ -235,11 +243,10 @@ class Trainer:
 
                 # forward things
                 outputs = self.G1(inputs)
-                outputs = outputs[:, :3]
                 inputs2 = torch.cat((conditionImages, outputs), dim=1)
                 outputs2 = self.G2(inputs2)
-                outputs2 = outputs2[:, 1:4]
                 generated = outputs2 + outputs
+                generated = generated
 
                 for x, img in enumerate(generated):
                     toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
@@ -269,4 +276,4 @@ if __name__ == "__main__":
     #=============================>
     for up in [1]:
         for mask in [1]:
-            Trainer(sample, 6, up, mask).startTraining(20, 1, "4_border_removed")
+            Trainer(sample, 5, up, mask).startTraining(30, 0, "BBox_upsample")
