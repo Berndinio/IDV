@@ -151,7 +151,7 @@ class Trainer:
             self.G1 = torch.load("results/"+loaderPrefix+"G1.pt")
         # stage 1
         if(trainingStage <= 1):
-            optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.000002,
+            optimizer = torch.optim.Adam(list(self.G2.parameters()) + list(self.D.parameters()), lr=0.00001,
                                          betas=(0.5, 0.999))
             epochLosses = []
             lamb = 1.0
