@@ -1,7 +1,7 @@
 ########################################################################################################################
 # Jan Sieber, 3219317
 # Python 3.5
-# Deep Vision, University of Heidelberg, Prof. Dr. Björn Ommer
+# Deep Vision, University of Heidelberg, Prof. Dr. Bjoern Ommer
 ########################################################################################################################
 
 import copy

@@ -15,7 +15,7 @@ import cv2
 
 
 class FEIPostDataset(Dataset):
-    def __init__(self, root, sampleShape, maskType, transform=None):
+    def __init__(self, root, sampleShape, maskType, train, transform=None):
         self.root_dir = root
         self.transform = transform
         self.sampleShape = sampleShape
@@ -26,9 +26,19 @@ class FEIPostDataset(Dataset):
             if ".keep" in self.files:
                 self.files.remove(".keep")
             continue
-        self.entities = list(set([f.split("-")[0] for f in self.files]))
-
+        self.entities = sorted(list(set([f.split("-")[0] for f in self.files])))
         self.poseEstimator = FacePoseEstimator()
+
+        #train test split
+        self.train = train
+        splitIdx = int(0.9*len(self.entities))
+        if self.train:
+            self.entities = self.entities[:splitIdx]
+        else:
+            self.entities = self.entities[splitIdx:]
+        self.files = [x for x in self.files if x.split("-")[0] in self.entities]
+        print("#Entities in dataset:", len(self.entities), "#Files in dataset:", len(self.files))
+
 
     def __len__(self):
         return len(self.files) - len(self.entities) * 4

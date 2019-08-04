@@ -27,7 +27,15 @@ class Trainer:
             transforms.ToTensor()
         ])
         self.dataset = FEIPostDataset(root="dataset/FEI/", sampleShape=s,
-                                 maskType=maskType, transform=data_transform)
+                                 maskType=maskType, train=True, transform=data_transform)
+        self.dataLoader = torch.utils.data.DataLoader(self.dataset,
+                                 batch_size=4, shuffle=True,
+                                 num_workers=4)
+        self.testDataset = FEIPostDataset(root="dataset/FEI/", sampleShape=s,
+                                 maskType=maskType, train=False, transform=data_transform)
+        self.testDataLoader = torch.utils.data.DataLoader(self.testDataset,
+                                 batch_size=1, shuffle=False,
+                                 num_workers=4)
         conditionImage, targetImage, mask, embeddings = self.dataset[0]
         print("Dataset shapes: ", conditionImage.shape, targetImage.shape, mask.shape, embeddings.shape)
         #some variables
@@ -80,9 +88,7 @@ class Trainer:
         """
         :param maskType:    0=Landmark, 1=BBox
         """
-        dataLoader = torch.utils.data.DataLoader(self.dataset,
-                                                 batch_size=4, shuffle=True,
-                                                 num_workers=4)
+
         print("Loaded Data")
 
         #path of plots
@@ -108,7 +114,7 @@ class Trainer:
                     os.makedirs(folderPath)
                 #begin training
                 running_loss = 0
-                for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+                for i, (conditionImages, targetImages, masks, embeddings) in enumerate(self.dataLoader, 0):
                     conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                     inputs = torch.cat((conditionImages, embeddings), dim=1)
                     # zero the parameter gradients
@@ -128,7 +134,7 @@ class Trainer:
                         running_loss = 0
                     if i % 20 == 0 and not i == 0:  # print every 2000 mini-batches
                         print('[%d, %5d] loss: %.3f' %
-                              (epoch + 1, (i + 1)/len(dataLoader)*100.0, running_loss / 2000))
+                              (epoch + 1, (i + 1)/len(self.dataLoader)*100.0, running_loss / 2000))
                         running_loss = 0.0
                         # save images
                         for x, img in enumerate(outputs):
@@ -138,7 +144,7 @@ class Trainer:
                             toSave.save(folderPath+"1G-conditionImages"+str(x)+".png")
                             toSave = transforms.ToPILImage(mode="RGB")(targetImages[x].cpu())
                             toSave.save(folderPath+"1G-target"+str(x)+".png")
-                epochLosses.append(allLossInEpoch/(len(dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
+                epochLosses.append(allLossInEpoch/(len(self.dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
                 plt.plot(epochLosses)
                 plt.title(mType+" "+up)
                 plt.savefig(folderPath+"epochLossG1.png")
@@ -162,7 +168,7 @@ class Trainer:
                 import os
                 if not os.path.exists(folderPath):
                     os.makedirs(folderPath)
-                for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+                for i, (conditionImages, targetImages, masks, embeddings) in enumerate(self.dataLoader, 0):
                     conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                     ran = random.random()
                     optimizer.zero_grad()
@@ -209,7 +215,7 @@ class Trainer:
                     allLossInEpoch += loss.item()
                     if i % 20 == 0 and not i == 0:  # print every 2000 mini-batches
                         print('[%d, %5d] loss: %.3f' %
-                              (epoch + 1, (i + 1)/len(dataLoader)*100.0, running_loss / 2000))
+                              (epoch + 1, (i + 1)/len(self.dataLoader)*100.0, running_loss / 2000))
                         running_loss = 0.0
                         # save images
                         for x, img in enumerate(generated):
@@ -218,7 +224,7 @@ class Trainer:
                             if targetDecision[0] == 0:
                                 toSave = transforms.ToPILImage(mode="RGB")(outputs2[x].cpu())
                                 toSave.save(folderPath+"2G-generated-diff-"+str(x)+".png")
-                epochLosses.append(allLossInEpoch/(len(dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
+                epochLosses.append(allLossInEpoch/(len(self.dataLoader) * self.sampleImage.shape[0] * self.sampleImage.shape[1] * self.sampleImage.shape[2]))
                 plt.plot(epochLosses)
                 plt.title(mType+" "+up)
                 plt.savefig(folderPath+"epochLossG2.png")
@@ -239,7 +245,8 @@ class Trainer:
             if not os.path.exists(folderPath):
                 os.makedirs(folderPath)
             finalString = "SSIM RGB-Loss\n"
-            for i, (conditionImages, targetImages, masks, embeddings) in enumerate(dataLoader, 0):
+            finalThings = [0, 0, 0, 0]
+            for i, (conditionImages, targetImages, masks, embeddings) in enumerate(self.testDataLoader, 0):
                 conditionImages, targetImages, masks, embeddings = conditionImages.to(Utils.g_device), targetImages.to(Utils.g_device), masks.to(Utils.g_device), embeddings.to(Utils.g_device)
                 inputs = torch.cat((conditionImages, embeddings), dim=1)
 
@@ -260,15 +267,15 @@ class Trainer:
 
                 for x, img in enumerate(generated):
                     toSave = transforms.ToPILImage(mode="RGB")(img.cpu())
-                    toSave.save(folderPath+"x-generated-fromG2-"+str(x)+".png")
+                    toSave.save(folderPath+"x-generated-fromG2-"+str(i)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(outputs[x].cpu())
-                    toSave.save(folderPath+"x-generated-fromG1-"+str(x)+".png")
+                    toSave.save(folderPath+"x-generated-fromG1-"+str(i)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(conditionImages[x].cpu())
-                    toSave.save(folderPath+"x-generated-conditionImages-"+str(x)+".png")
+                    toSave.save(folderPath+"x-generated-conditionImages-"+str(i)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(targetImages[x].cpu())
-                    toSave.save(folderPath+"x-generated-target-"+str(x)+".png")
+                    toSave.save(folderPath+"x-generated-target-"+str(i)+".png")
                     toSave = transforms.ToPILImage(mode="RGB")(outputs2[x].cpu())
-                    toSave.save(folderPath+"x-generated-diff-"+str(x)+".png")
+                    toSave.save(folderPath+"x-generated-diff-"+str(i)+".png")
 
                     sourceImg, generatedImg1, generatedImg2, targetImage = \
                                 torch.transpose(conditionImages[x].cpu(), 0, 1), \
@@ -286,15 +293,25 @@ class Trainer:
                                 generatedImg2.detach().numpy(), \
                                 targetImage.detach().numpy()
 
-                    finalString += str(ssim(sourceImg, targetImage, data_range=1.0, multichannel=True))+ ","
-                    finalString += str(ssim(generatedImg1, targetImage, data_range=1.0, multichannel=True))+ ","
-                    finalString += str(ssim(generatedImg2, targetImage, data_range=1.0, multichannel=True))+ ","
-                    finalString += str(np.sum(np.abs(generatedImg2 - targetImage))/(generatedImg2.shape[0]*generatedImg2.shape[1]*generatedImg2.shape[2])) + "\n"
-                if i==2:
-                    f = open(folderPath+"results.txt", "w")
-                    f.write(finalString)
-                    f.close()
-                    break
+                    val = ssim(sourceImg, targetImage, data_range=1.0, multichannel=True)
+                    finalString += str(val)+ ","
+                    finalThings[0] += val/ len(self.testDataset)
+                    val = ssim(generatedImg1, targetImage, data_range=1.0, multichannel=True)
+                    finalString += str(val)+ ","
+                    finalThings[1] += val/ len(self.testDataset)
+                    val = ssim(generatedImg2, targetImage, data_range=1.0, multichannel=True)
+                    finalString += str(val)+ ","
+                    finalThings[2] += val/ len(self.testDataset)
+                    val = np.sum(np.abs(generatedImg2 - targetImage))/(generatedImg2.shape[0]*generatedImg2.shape[1]*generatedImg2.shape[2])
+                    finalString += str(val) + "\n"
+                    finalThings[3] += val/ len(self.testDataset)
+            finalString += "Average:"
+            for y in finalThings:
+                finalString += str(y)+","
+            finalString += "\n"
+            f = open(folderPath+"results.txt", "w")
+            f.write(finalString)
+            f.close()
 
 if __name__ == "__main__":
     import argparse
