@@ -8,16 +8,19 @@ Install needed modules in conda environment (python 3.5):
     python -m pip install -U matplotlib
     conda install -c conda-forge scikit-image
 
-Go into the root directory (where this README.md is).
+or use the
+
+    requirements.txt
+
+
+Download the FEI dataset (https://fei.edu.br/~cet/facedatabase.html) and put it into <projectRoot>/dataset/FEI/
+Download the face-landmark detector from https://github.com/davisking/dlib-models/blob/master/shape_predictor_68_face_landmarks.dat.bz2 and put it into <projectRoot>/estimators/pretrained_files
 
 ## Start training
+Go into the root directory (where this README.md is).
 Start the training with:
 
     python -m start
-
-There are different modes for masks and upsampling methods.
-The image size is variable (needs to stay the same in one training)<br />
-==> You could use different datasets
 
 Starting at different training stages can be done with:
 
@@ -36,8 +39,6 @@ According to this there will need to be the files:
 
 Number of epochs is supplied by the epochs argument. Default = 30.
 ## Structure & Format & Recommendations
-Sometimes the process can be unstable and needs to be restarted.
-
 All trained files have the format:
 
     G1-<loss>-<epoch>.pt
