@@ -1,4 +1,21 @@
 # IDV
+## Task
+Facial Pose Manipulation transfered from https://arxiv.org/abs/1705.09368 ( Pose Guided Person Image Generation from Liqian Ma, Xu Jia, Qianru Sun, Bernt Schiele, Tinne Tuytelaars, Luc Van Gool)
+
+## Abstract
+Nowadays pose or shape manipulation is a largely applied field. Especially in CGI. This
+report is about transfering the body pose manipulation method from Liqian Ma et al[1] to
+face/head pose manipulation. They use a two staged training process. First they generate
+a coarse pose manipulated image. Then they transfer details to the generated image by
+using a GAN-like training setting. Additionally, masking is applied to mark regions of
+interest.
+Transfering this method to facial pose manipulation can be challenging by choosing the
+pose representation, masking, upsampling method of the generators and implementing it
+from scratch with the pytorch library.
+
+## Additional material
+Poster and Report.
+
 ## Install environment
 Install needed modules in conda environment (python 3.5):
 
